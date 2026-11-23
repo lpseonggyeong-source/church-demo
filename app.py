@@ -1077,25 +1077,26 @@ class App(BaseHTTPRequestHandler):
             first = {"today":today,"7d":today-timedelta(days=6),"month":today.replace(day=1),"30d":today-timedelta(days=29)}[period]
             q_start, q_end = first.isoformat(), today.isoformat()
         state = a.get("status","")
-        state = state if state in {"PAID","PENDING","FAILED","CANCELLED"} else ""
+        state = "FAILED" if state == "CANCELLED" else state
+        state = state if state in {"PAID","FAILED"} else ""
 
-        conditions, params = ["d.church=?"], [church]
+        # 관리자 목록은 결과가 확정된 거래만: 완료(PAID) · 실패(FAILED · CANCELLED). 처리 중은 확정되면 나타남
+        conditions, params = ["d.church=?", "p.status IN ('PAID','FAILED','CANCELLED')"], [church]
         if name == "익명":
             conditions.append("d.donor_name=''")
         elif name:
             conditions.append("instr(lower(d.donor_name), lower(?)) > 0")
             params.append(name)
         if q_start:
-            conditions.append("substr(d.day,1,10) >= ?")
+            conditions.append("substr(COALESCE(d.paid_at,d.day),1,10) >= ?")
             params.append(q_start)
         if q_end:
-            conditions.append("substr(d.day,1,10) <= ?")
+            conditions.append("substr(COALESCE(d.paid_at,d.day),1,10) <= ?")
             params.append(q_end)
-        if state == "PENDING":
-            conditions.append("p.status IN ('PENDING','READY')")
-        elif state:
-            conditions.append("p.status=?")
-            params.append(state)
+        if state == "PAID":
+            conditions.append("p.status='PAID'")
+        elif state == "FAILED":
+            conditions.append("p.status IN ('FAILED','CANCELLED')")
         source = " FROM donation d JOIN payment p USING(id) WHERE " + " AND ".join(conditions)
         totals = one("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN p.status='PAID' THEN d.amount ELSE 0 END),0) AS paid,"
                      " COALESCE(SUM(p.status='PAID'),0) AS paid_count" + source, *params)
@@ -1103,7 +1104,7 @@ class App(BaseHTTPRequestHandler):
         pages = max(1, (totals["count"] + page_size - 1) // page_size)
         requested = a.get("page","")
         page = min(pages, max(1, int(requested))) if re.fullmatch(r"[0-9]{1,9}", requested) else 1
-        rows = query("SELECT d.*, p.status" + source + " ORDER BY d.day DESC, d.rowid DESC LIMIT ? OFFSET ?",
+        rows = query("SELECT d.*, p.status" + source + " ORDER BY COALESCE(d.paid_at,d.day) DESC, d.rowid DESC LIMIT ? OFFSET ?",
                      *params, page_size, (page - 1) * page_size)
 
         def link(**changes):
@@ -1126,7 +1127,7 @@ class App(BaseHTTPRequestHandler):
         def options(items, current):
             return "".join(f'<option value="{k}"{" selected" if k == current else ""}>{label}</option>' for k, label in items)
         period_opts = options(ADMIN_PERIODS, period)
-        status_opts = options([("","전체")] + [(k, MEMBER_STATUSES[k]) for k in ["PAID","PENDING","FAILED","CANCELLED"]], state)
+        status_opts = options([("","전체")] + [("PAID","완료"),("FAILED","실패")], state)
 
         # 머리 — PC: 마지막 갱신 + 새로고침, 모바일: 필터 버튼
         stamp_now = datetime.now(KST).strftime("%Y.%m.%d %H:%M")
@@ -1145,7 +1146,7 @@ class App(BaseHTTPRequestHandler):
         filters = (
             f'<form class="adm-filter" method="get" action="{reset}">'
             f'<label class="f-name">헌금자 이름<input type="search" name="name" value="{e(name)}" maxlength="40" placeholder="이름, 익명"></label>'
-            f'<label class="f-period">기간 (접수 기준)<select name="period">{period_opts}</select></label>'
+            f'<label class="f-period">기간 (결제 일시 기준)<select name="period">{period_opts}</select></label>'
             f'<div class="f-range"><span>시작일 ~ 종료일</span><div><input type="date" name="from" value="{start}" aria-label="시작일">'
             f'<i aria-hidden="true">~</i><input type="date" name="to" value="{end}" aria-label="종료일"></div></div>'
             f'<label class="f-status">결제 상태<select name="status">{status_opts}</select></label>'
@@ -1163,7 +1164,6 @@ class App(BaseHTTPRequestHandler):
         def stamp(value):
             return e((value or "")[:19].replace("-", "."))
 
-        waiting = {"PENDING":"승인 대기","READY":"승인 대기","FAILED":"승인 거절","CANCELLED":"결제 취소"}
         trs, cards = [], []
         for row in rows:
             who = row["donor_name"]
@@ -1174,10 +1174,10 @@ class App(BaseHTTPRequestHandler):
             else:
                 donor = f'<b>{e(who)}</b>'
             status = row["status"]
-            done = stamp(row["paid_at"]) if row["paid_at"] else waiting.get(status, "—")
-            when = (f'<dl class="d-when"><div><dt>완료</dt><dd>{done}</dd></div>'
-                    f'<div><dt>접수</dt><dd>{stamp(row["day"])}</dd></div></dl>')
-            cls = "is-" + e(status.lower())
+            status = "PAID" if status == "PAID" else "FAILED"      # 관리자 표시는 완료 / 실패 두 가지
+            done = stamp(row["paid_at"]) if row["paid_at"] else "—"
+            when = f'<span class="d-time">{done}</span>'
+            cls = "is-" + status.lower()
             badge = status_badge(status, member=True)
             trs.append(f'<tr class="{cls}"><td class="d-donor">{donor}</td><td>{when}</td><td>{e(row["category"])}</td>'
                        f'<td class="num d-amt">{row["amount"]:,}</td><td>{badge}</td></tr>')
@@ -1185,7 +1185,7 @@ class App(BaseHTTPRequestHandler):
                          f'<div class="c-mid">{badge}<span>{e(row["category"])}</span></div>{when}</li>')
         if trs:
             table = ('<div class="adm-tablewrap"><table class="adm-table" aria-label="헌금 내역 · 시각은 한국 시간">'
-                     '<thead><tr><th scope="col">헌금자</th><th scope="col">일시<small>접수 최신순</small></th><th scope="col">헌금 항목</th>'
+                     '<thead><tr><th scope="col">헌금자</th><th scope="col">결제 일시<small>최신순</small></th><th scope="col">헌금 항목</th>'
                      '<th scope="col" class="num">금액<small>원</small></th><th scope="col">결제 상태</th></tr></thead>'
                      f'<tbody>{"".join(trs)}</tbody></table></div>'
                      f'<ul class="adm-cards" aria-label="헌금 내역">{"".join(cards)}</ul>')
@@ -1205,9 +1205,10 @@ class App(BaseHTTPRequestHandler):
                        f'<a class="ghost sm" href="{reset}">조건 초기화</a></section>')
         else:
             content = '<section class="adm-empty"><h2>아직 접수된 헌금이 없습니다</h2><p>성도가 헌금하면 이곳에 바로 표시됩니다.</p></section>'
-        legend = ('<p class="adm-legend"><span><b>완료</b> 카드 승인이 확인된 시각</span><span><b>접수</b> 성도가 결제를 시작한 시각</span>'
+        legend = ('<p class="adm-legend"><span><b>결제 일시</b> 카드 승인이 확인된 시각</span><span><b>실패</b> 승인 거절 · 결제 취소 (금액 청구 없음)</span>'
                   '<span><b>익명</b> 헌금자가 이름을 비운 거래</span><span><b>이름 기록 없음</b> 이름을 저장하기 전의 거래</span>'
-                  '<span><b>합계</b> 결제 완료 건만 더하며 처리 중·실패·취소는 제외</span>'
+                  '<span><b>합계</b> 결제 완료 건만 더하며 실패는 제외</span>'
+                  '<span><b>목록</b> 결제 결과가 확정된 거래만 표시</span>'
                   f'<span><b>결제 모드</b> {PG_MODE_LABEL}</span></p>')
         return head + filters + summary + content + legend
 

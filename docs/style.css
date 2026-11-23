@@ -660,6 +660,9 @@ dl.d-when{grid-template-columns:1fr}
 /* 수정: 1024~1279px 노트북에서 필터 막대가 세로로 쌓이던 문제 — 칸이 줄어들 수 있게 */
 @media(min-width:1024px){.adm-filter > *{min-width:0}.adm-filter input[type=date]{padding:0 8px;font-size:13px}.adm-filter .primary,.adm-filter .quiet{flex:none}}
 @media(min-width:1024px){.f-range > div input{flex:1 1 0;width:0;min-width:0}}
+/* 관리자 헌금 내역: 결제 일시 한 줄 */
+.d-time{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.c-top + .c-mid + .d-time,.adm-cards .d-time{display:block;font-size:12px}
 
 /* 시연판 첫 화면 */
 .demo-landing{padding-bottom:0}.demo-main{max-width:640px;padding:56px 20px}
