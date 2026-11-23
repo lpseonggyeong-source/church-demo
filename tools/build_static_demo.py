@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "docs"
 CHURCH = "grace"
 G = f"/c/{CHURCH}"
-BIBLE_CHAPTERS = {("1CO", "13"), ("PSA", "23"), ("PSA", "121"), ("JHN", "3"), ("GEN", "1"), ("MAT", "5")}  # None = 성경 전체
+BIBLE_CHAPTERS = None   # None = 성경 전체(66권 1,189장). 일부만 넣으려면 {("1CO", "13"), ("PSA", "23"), ...}
 OKB_URL = "https://github.com/open-korean-bible/open-korean-bible"   # 시연판에 없는 장은 성경 원본 저장소로 연결
 NOTICE = "demo-only"          # 시연판에서 지원하지 않는 동작 안내 페이지
 
@@ -287,7 +287,7 @@ LANDING = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta na
 <a href="c/{c}/admin.html"><b>관리자</b><small>헌금 내역 · 교회 설정 (PC 1024px 이상 / 모바일)</small></a>
 <a href="admin.html"><b>관리자 로그인 화면</b><small>로그인 버튼을 누르면 헌금 내역으로 이동합니다</small></a>
 </div>
-<p class="muted">만든 시각 {stamp} · 성경은 대표 장(고린도전서 13장, 시편 23·121편 등)만 담았고, 나머지 장은 <a href="https://github.com/open-korean-bible/open-korean-bible">Open Korean Bible 원본</a>으로 연결됩니다</p>
+<p class="muted">만든 시각 {stamp} · 성경 본문은 <a href="https://github.com/open-korean-bible/open-korean-bible">Open Korean Bible</a>(CC BY 4.0) 66권 전체</p>
 </main></body></html>"""
 
 NOTICE_HTML = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
