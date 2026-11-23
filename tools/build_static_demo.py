@@ -32,7 +32,8 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "docs"
 CHURCH = "grace"
 G = f"/c/{CHURCH}"
-BIBLE_CHAPTERS = {("1CO", "13"), ("PSA", "23"), ("PSA", "121"), ("JHN", "3"), ("GEN", "1"), ("MAT", "5")}
+BIBLE_CHAPTERS = {("1CO", "13"), ("PSA", "23"), ("PSA", "121"), ("JHN", "3"), ("GEN", "1"), ("MAT", "5")}  # None = 성경 전체
+OKB_URL = "https://github.com/open-korean-bible/open-korean-bible"   # 시연판에 없는 장은 성경 원본 저장소로 연결
 NOTICE = "demo-only"          # 시연판에서 지원하지 않는 동작 안내 페이지
 
 
@@ -117,7 +118,7 @@ def canonical(url):
             return f"c/{CHURCH}/bible" + (f"?section={q['section']}" if q.get("section") in {"old", "new"} else "")
         if not ch:
             return f"c/{CHURCH}/bible?b={b}"
-        if (b, ch) not in BIBLE_CHAPTERS:
+        if BIBLE_CHAPTERS is not None and (b, ch) not in BIBLE_CHAPTERS:
             return None
         return f"c/{CHURCH}/bible?b={b}&ch={ch}" + ("&v=1" if q.get("v") else "")
     if page == "kiosk":
@@ -218,7 +219,7 @@ def collect(base):
             if k and k not in seen:
                 seen.add(k)
                 queue.append(k)
-        if len(pages) > 400:
+        if len(pages) > 3000:
             raise RuntimeError("페이지가 너무 많습니다 — canonical 규칙을 확인하세요")
     return pages, post_map
 
@@ -243,6 +244,8 @@ def rewrite(key, html, pages, post_map):
         if not url.startswith("/"):
             return url + frag
         k = canonical(url)
+        if k is None and urllib.parse.urlsplit(url).path.endswith("/bible"):
+            return OKB_URL
         return rel(key, filename(k if k in pages else NOTICE)) + frag
 
     def form(m):
@@ -265,6 +268,10 @@ def rewrite(key, html, pages, post_map):
     html = re.sub(r'(href|src)="([^"]*)"', lambda m: f'{m.group(1)}="{link(m.group(2))}"', html)
     html = re.sub(r'(content="\d+;\s*url=)([^"]*)"', lambda m: f'{m.group(1)}{link(m.group(2))}"', html)
     html = html.replace(" data-autosave", "")
+    if "/bible__" in filename(key) and "-v-1" in filename(key):
+        # 장마다 한 페이지 — 선택한 절은 주소의 #verse-N 으로 강조 (CSS :target)
+        html = html.replace(' aria-current="location"', "")
+        html = re.sub(r"<span>\d+절 선택됨 · 앞 절은 위로 스크롤</span>", "<span>선택한 절이 강조됩니다</span>", html)
     return html
 
 
@@ -280,13 +287,13 @@ LANDING = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta na
 <a href="c/{c}/admin.html"><b>관리자</b><small>헌금 내역 · 교회 설정 (PC 1024px 이상 / 모바일)</small></a>
 <a href="admin.html"><b>관리자 로그인 화면</b><small>로그인 버튼을 누르면 헌금 내역으로 이동합니다</small></a>
 </div>
-<p class="muted">만든 시각 {stamp} · 성경 본문은 일부 장(고린도전서 13장, 시편 23·121편, 요한복음 3장 등)만 포함</p>
+<p class="muted">만든 시각 {stamp} · 성경은 대표 장(고린도전서 13장, 시편 23·121편 등)만 담았고, 나머지 장은 <a href="https://github.com/open-korean-bible/open-korean-bible">Open Korean Bible 원본</a>으로 연결됩니다</p>
 </main></body></html>"""
 
 NOTICE_HTML = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>시연판 안내 | 온길</title><link rel="stylesheet" href="{fonts}"><link rel="stylesheet" href="style.css"></head>
 <body class="demo-landing"><main class="demo-main"><div class="heading"><p class="eyebrow" lang="en">Demo only</p><h1>시연판에서는 지원하지 않는 동작이에요</h1></div>
-<p class="lead">이 사본은 화면을 보기 위한 정적 파일이라 저장 · 결제 · 일부 성경 장은 열리지 않습니다. 실제 동작은 앱을 실행해서 확인해 주세요.</p>
+<p class="lead">이 사본은 화면을 보기 위한 정적 파일이라 저장 · 로그인 · 결제는 동작하지 않습니다. 실제 동작은 앱을 실행해서 확인해 주세요.</p>
 <div class="pair"><a class="primary" href="javascript:history.back()">이전 화면으로</a><a class="ghost" href="index.html">시연 첫 화면</a></div></main></body></html>"""
 
 DEMO_CSS = """
@@ -294,6 +301,9 @@ DEMO_CSS = """
 .demo-landing{padding-bottom:0}.demo-main{max-width:640px;padding:56px 20px}
 .demo-links{display:grid;gap:12px;margin:24px 0}
 .demo-links a{display:grid;gap:4px;padding:20px 24px;border:1px solid var(--line-2);border-radius:var(--r4);background:var(--surface);color:var(--ink);text-decoration:none}
+.verses li:target{background:var(--oxblood-tint);padding:8px}
+.verses li:target > b{align-self:start;justify-self:center;display:grid;place-items:center;width:22px;height:22px;margin-top:6px;padding:0;border-radius:var(--r1);background:var(--oxblood);color:var(--on-oxblood);font-weight:600}
+.passage-flow .v:target{background:var(--oxblood-tint)}
 .demo-links a:hover{border-color:var(--oxblood)}.demo-links b{font:600 19px/1.4 var(--serif)}.demo-links small{font-size:13px;color:var(--ink-2)}
 """
 
