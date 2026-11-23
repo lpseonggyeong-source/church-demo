@@ -1,0 +1,13 @@
+# 로컬 데이터 · 비밀 설정 (올리지 않음)
+ongil.sqlite3
+*.sqlite3
+*.db
+.env
+ongil.env
+*.log
+# Claude 작업 지침 (개인 환경용)
+CLAUDE.md
+# 기타
+__pycache__/
+*.pyc
+.DS_Store

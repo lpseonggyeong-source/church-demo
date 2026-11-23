@@ -1,0 +1,22 @@
+[Unit]
+Description=온길 교회 헌금 서비스
+After=network.target
+
+[Service]
+Type=simple
+User=ongil
+Group=ongil
+WorkingDirectory=/opt/ongil
+EnvironmentFile=/opt/ongil/ongil.env
+ExecStart=/usr/bin/python3 /opt/ongil/app.py
+Restart=on-failure
+RestartSec=3
+
+# 파일시스템 쓰기는 작업 디렉터리로만 제한합니다 (SQLite DB가 이 안에 있어야 함).
+ProtectSystem=strict
+ReadWritePaths=/opt/ongil
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
