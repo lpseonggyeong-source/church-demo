@@ -665,7 +665,4 @@ dl.d-when{grid-template-columns:1fr}
 .demo-landing{padding-bottom:0}.demo-main{max-width:640px;padding:56px 20px}
 .demo-links{display:grid;gap:12px;margin:24px 0}
 .demo-links a{display:grid;gap:4px;padding:20px 24px;border:1px solid var(--line-2);border-radius:var(--r4);background:var(--surface);color:var(--ink);text-decoration:none}
-.verses li:target{background:var(--oxblood-tint);padding:8px}
-.verses li:target > b{align-self:start;justify-self:center;display:grid;place-items:center;width:22px;height:22px;margin-top:6px;padding:0;border-radius:var(--r1);background:var(--oxblood);color:var(--on-oxblood);font-weight:600}
-.passage-flow .v:target{background:var(--oxblood-tint)}
 .demo-links a:hover{border-color:var(--oxblood)}.demo-links b{font:600 19px/1.4 var(--serif)}.demo-links small{font-size:13px;color:var(--ink-2)}

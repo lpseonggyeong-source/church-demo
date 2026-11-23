@@ -269,9 +269,9 @@ def rewrite(key, html, pages, post_map):
     html = re.sub(r'(content="\d+;\s*url=)([^"]*)"', lambda m: f'{m.group(1)}{link(m.group(2))}"', html)
     html = html.replace(" data-autosave", "")
     if "/bible__" in filename(key) and "-v-1" in filename(key):
-        # 장마다 한 페이지 — 선택한 절은 주소의 #verse-N 으로 강조 (CSS :target)
-        html = html.replace(' aria-current="location"', "")
-        html = re.sub(r"<span>\d+절 선택됨 · 앞 절은 위로 스크롤</span>", "<span>선택한 절이 강조됩니다</span>", html)
+        # 장마다 한 페이지(서버가 만든 1절 선택 화면 그대로) — 열 때 주소의 #verse-N 을 읽어
+        # 서버가 N절을 골랐을 때와 같은 표시로 바꿉니다 (demo-bible.js)
+        html = html.replace("</body>", f'<script defer src="{rel(key, "demo-bible.js")}"></script></body>')
     return html
 
 
@@ -296,14 +296,33 @@ NOTICE_HTML = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><met
 <p class="lead">이 사본은 화면을 보기 위한 정적 파일이라 저장 · 로그인 · 결제는 동작하지 않습니다. 실제 동작은 앱을 실행해서 확인해 주세요.</p>
 <div class="pair"><a class="primary" href="javascript:history.back()">이전 화면으로</a><a class="ghost" href="index.html">시연 첫 화면</a></div></main></body></html>"""
 
+DEMO_BIBLE_JS = """"use strict";
+// 시연판 전용: 장 페이지 하나로 로컬 서버의 '절 선택' 화면을 똑같이 재현합니다.
+// 서버 app.py chapter_text()와 같은 표시: aria-current="location" + <span class="sr">선택한 절 </span> + 'N절 선택됨' 문구
+(function () {
+  var m = /^#verse-(\\d+)$/.exec(location.hash);
+  if (!m) return;
+  var target = document.getElementById("verse-" + m[1]);
+  if (!target || target.hasAttribute("aria-current")) return;
+  document.querySelectorAll(".verses li[aria-current]").forEach(function (li) {
+    var sr = li.firstElementChild;
+    if (sr && sr.className === "sr") sr.remove();
+    li.outerHTML = li.outerHTML.replace(' aria-current="location"', "");
+  });
+  // 서버와 같은 속성 순서: id → aria-current → tabindex, 맨 앞에 낭독기용 '선택한 절'
+  target.outerHTML = target.outerHTML.replace(/^<li id="(verse-\\d+)" tabindex="-1">/,
+    '<li id="$1" aria-current="location" tabindex="-1"><span class="sr">선택한 절 </span>');
+  document.querySelectorAll("span").forEach(function (span) {
+    if (/^\\d+절 선택됨 · 앞 절은 위로 스크롤$/.test(span.textContent)) span.textContent = m[1] + "절 선택됨 · 앞 절은 위로 스크롤";
+  });
+})();
+"""
+
 DEMO_CSS = """
 /* 시연판 첫 화면 */
 .demo-landing{padding-bottom:0}.demo-main{max-width:640px;padding:56px 20px}
 .demo-links{display:grid;gap:12px;margin:24px 0}
 .demo-links a{display:grid;gap:4px;padding:20px 24px;border:1px solid var(--line-2);border-radius:var(--r4);background:var(--surface);color:var(--ink);text-decoration:none}
-.verses li:target{background:var(--oxblood-tint);padding:8px}
-.verses li:target > b{align-self:start;justify-self:center;display:grid;place-items:center;width:22px;height:22px;margin-top:6px;padding:0;border-radius:var(--r1);background:var(--oxblood);color:var(--on-oxblood);font-weight:600}
-.passage-flow .v:target{background:var(--oxblood-tint)}
 .demo-links a:hover{border-color:var(--oxblood)}.demo-links b{font:600 19px/1.4 var(--serif)}.demo-links small{font-size:13px;color:var(--ink-2)}
 """
 
@@ -345,6 +364,7 @@ def main():
                                     .replace("{stamp}", datetime.now().strftime("%Y-%m-%d %H:%M")), encoding="utf-8")
     (OUT / f"{NOTICE}.html").write_text(NOTICE_HTML.replace("{fonts}", fonts), encoding="utf-8")
     (OUT / ".nojekyll").write_text("")
+    (OUT / "demo-bible.js").write_text(DEMO_BIBLE_JS, encoding="utf-8")
     print(f"시연판 {len(pages) + 2}개 화면 → {OUT}")
 
 
